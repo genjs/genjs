@@ -1,0 +1,9 @@
+{
+  "watch": [
+    "index.js",
+    "data",
+    "helpers",
+    "templates"
+  ],
+  "ext": "*"
+}

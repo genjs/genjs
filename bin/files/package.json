@@ -1,0 +1,19 @@
+{
+  "name": "",
+  "version": "",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "ljs-template": "*",
+    "js-yaml": "^3.5.3",
+    "mkdirp": "^0.5.1",
+    "gutil": "*"
+  },
+  "devDependencies": {
+    "nodemon": "^1.9.1"
+  }
+}
