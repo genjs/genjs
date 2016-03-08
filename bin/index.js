@@ -41,7 +41,8 @@ function doInit() {
   var dirs = [
     'data',
     'helpers',
-    'templates'
+    'templates',
+    'validate'
   ];
   _.each(dirs, function(dir) {
     console.log('=> Create directory :', dir);

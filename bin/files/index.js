@@ -53,6 +53,35 @@ function loadData(dir) {
   return data;
 }
 
+function validateData(dir, data) {
+  var hasValidationError = false;
+  var files = fs.readdirSync(dir);
+  for(var i=0; i<files.length; i++) {
+    var filename = files[i];
+    var file = path.join(dir, filename);
+    if(fs.statSync(file).isFile()) {
+      var validate = require(path.join(process.cwd(),file));
+      try {
+        var errors = validate.validate(data);
+        if(errors != null && errors instanceof Array && errors.length > 0) {
+          hasValidationError = true;
+          console.log('****************************');
+          console.log('**** Validation errors ****');
+          console.log('=>',file,':');
+          for(var i=0; i<errors.length; i++) {
+            console.log((i+1)+')',errors[i]);
+          }
+          console.log('****************************');
+        }
+      } catch(e) {
+        console.log('Error during validation - Validate file:',file,' - Error:',e);
+        return true;
+      }
+    }
+  }
+  return hasValidationError;
+}
+
 function generate(data, indir, outdir) {
   var dirs = fs.readdirSync(indir);
   for(var i=0; i<dirs.length; i++) {
@@ -101,7 +130,6 @@ function generateFile(data, infile, outfile, type) {
 function renderFile(infile, outfile, context) {
   context.include = include(context);
   try {
-    console.log('content:',infile);
     fs.readFile(infile, 'utf8', function(e, content) {
       if(e) {
         throw e;
@@ -178,14 +206,26 @@ function loadHelpers(folder) {
   }
 }
 
-console.log('=> load data');
+console.log('-- START --');
+
+console.log('=> Load data');
 var data = loadData('data');
 
-console.log('=> load helpers');
+console.log('=> Validate data');
+var hasValidationError = validateData('validate', data);
+if(hasValidationError) {
+  console.log('=> Skip generate phase')
+  console.log('-- END --');
+  return;
+}
+
+console.log('=> Load helpers');
 var H = loadHelpers('helpers');
 if(!H) {
   console.log('No helper found : "helper/H.js"')
 }
 
-console.log('=> generate');
+console.log('=> Generate');
 generate(data, 'templates', 'build');
+
+console.log('-- END --');
