@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "GenJS",
   "files": [
-    "lib"
+    "lib", "bin"
   ],
   "bin": {
     "genjs": "bin/index.js"
