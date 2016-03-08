@@ -9,7 +9,7 @@ String.prototype.a = function () {
     return this.charAt(0).toUpperCase() + this.slice(1);
 }
 String.prototype.A = function () {
-    return this.charAt(0).toLowerCase() + this.slice(1);
+    return this.charAt(0).toUpperCase() + this.slice(1);
 }
 String.prototype.U = function () {
     return this.charAt(0).toUpperCase()
@@ -87,7 +87,9 @@ function generateFile(data, infile, outfile, type) {
         outfile
           .replace(/\[name\]/g, currentName)
           .replace(/\[name_a\]/g, currentName.a())
-          .replace(/\[name_A\]/g, currentName.A());
+          .replace(/\[name_A\]/g, currentName.A())
+          .replace(/\[name_l\]/g, currentName.l())
+          .replace(/\[name_U\]/g, currentName.U());
       renderFile(infile, currentFile, {
         data: data, current: current, currentName: currentName, H: H, U: U});
     }
