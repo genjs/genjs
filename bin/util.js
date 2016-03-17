@@ -3,7 +3,7 @@ var fs = require('fs');
 var path = require('path');
 var inquirer = require("inquirer");
 var mkdirp = require('mkdirp');
-var Q = require('Q');
+var Q = require('q');
 
 module.exports = {
   getCommands: getCommands,
