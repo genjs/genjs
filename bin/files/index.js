@@ -4,6 +4,7 @@ var yaml = require('js-yaml');
 var ljs = require('ljs-template');
 var mkdirp = require('mkdirp');
 var U = require('gutil');
+var merge = require('merge');
 
 String.prototype.a = function () {
     return this.charAt(0).toUpperCase() + this.slice(1);
@@ -12,10 +13,10 @@ String.prototype.A = function () {
     return this.charAt(0).toUpperCase() + this.slice(1);
 }
 String.prototype.U = function () {
-    return this.charAt(0).toUpperCase()
+    return this.toUpperCase()
 }
 String.prototype.l = function () {
-    return this.charAt(0).toLowerCase()
+    return this.toLowerCase()
 }
 String.prototype.removeUnderscore = function () {
   if(this.indexOf('_') == -1) {
@@ -40,11 +41,13 @@ function loadData(dir) {
     var filename = files[i];
     var file = path.join(dir, filename);
     if(fs.statSync(file).isDirectory()) {
-      data[filename] = loadData(file);
+      var dataToMerge = loadData(file);
+      data[filename] = merge.recursive(data[filename], dataToMerge);
     } else {
       var name = path.basename(filename, path.extname(filename));
       try {
-        data[name] = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
+        var dataToMerge = yaml.safeLoad(fs.readFileSync(file, 'utf8')) || {};
+        data[name] = merge.recursive(data[name], dataToMerge);
       } catch (e) {
         console.log('Error in YAML file:', file, ' - error:', e);
       }
@@ -82,33 +85,58 @@ function validateData(dir, data) {
   return hasValidationError;
 }
 
-function generate(data, indir, outdir) {
+function loadHelpers(dir) {
+  var helpers = {};
+  var hasValidationError = false;
+  var files = fs.readdirSync(dir);
+  for(var i=0; i<files.length; i++) {
+    var filename = files[i];
+    var file = path.join(dir, filename);
+    var helperName = path.basename(filename, path.extname(filename));
+    if(fs.statSync(file).isFile()) {
+      if(!path.isAbsolute(file)) {
+      	file = path.join(process.cwd(), file);
+      }
+      try {
+        if(require.resolve(file)) {
+          delete require.cache[require.resolve(file)];
+        }
+        helpers[helperName] = require(file);
+      } catch(e) {
+        console.log('** Error ** - Helper "'+file+'":',e);
+      }
+    }
+  }
+  return helpers;
+}
+
+function generate(data, helpers, indir, outdir) {
   var dirs = fs.readdirSync(indir);
   for(var i=0; i<dirs.length; i++) {
     var dir = path.join(indir, dirs[i]);
     if(fs.statSync(dir).isDirectory()) {
-      generateSub(data, indir, outdir, dirs[i], '');
+      generateSub(data, helpers, indir, outdir, dirs[i], '');
     }
   }
 }
 
-function generateSub(data, indir, outdir, type, subdir) {
+function generateSub(data, helpers, indir, outdir, type, subdir) {
   var files = fs.readdirSync(path.join(indir, type, subdir));
   for(var i=0; i<files.length; i++) {
     var filename = files[i];
     var file = path.join(indir, type, subdir, filename);
     if(fs.statSync(file).isDirectory()) {
       var dir = path.join(subdir, filename);
-      generateSub(data, indir, outdir, type, dir);
+      generateSub(data, helpers, indir, outdir, type, dir);
     } else {
       var outfile = path.join(outdir, subdir, filename);
-      generateFile(data, file, outfile, type);
+      generateFile(data, helpers, file, outfile, type);
     }
   }
   return data;
 }
 
-function generateFile(data, infile, outfile, type) {
+function generateFile(data, helpers, infile, outfile, type) {
   if(outfile.indexOf('[name') != -1) {
     for(var currentName in data[type]) {
       var current = data[type][currentName];
@@ -119,32 +147,46 @@ function generateFile(data, infile, outfile, type) {
           .replace(/\[name_A\]/g, currentName.A())
           .replace(/\[name_l\]/g, currentName.l())
           .replace(/\[name_U\]/g, currentName.U());
+      var pos;
+      while((pos = currentFile.indexOf('[')) != -1) {
+        var posEnd = currentFile.indexOf(']', pos);
+        var expr = currentFile.substring(pos+1, posEnd);
+        var exprSplits = expr.split('_');
+        var value = data;
+        for(var i=0; i<exprSplits.length && value != null; i++) {
+          if(exprSplits[i] != null && exprSplits[i] != '') {
+            value = value[exprSplits[i]];
+          }
+        }
+        if(value != null && value != '') {
+          value = value.replace(/\./g, path.sep); // does not work for file name
+          currentFile = currentFile.substring(0, pos) + value + currentFile.substring(posEnd+1);
+        }
+      }
       renderFile(infile, currentFile, {
-        data: data, current: current, currentName: currentName, H: H, U: U});
+        data: data, current: current, currentName: currentName, H: helpers, U: U});
     }
   } else {
-    renderFile(infile, outfile, {data: data, H: H, U: U});
+    renderFile(infile, outfile, {data: data, H: helpers, U: U});
   }
 }
 
 function renderFile(infile, outfile, context) {
   context.include = include(context);
   try {
-    fs.readFile(infile, 'utf8', function(e, content) {
+    fs.readFile(infile, 'utf8', function(e, templatecontent) {
       if(e) {
         throw e;
       }
-      if(content) {
-        var outcontent = render(infile, content, context);
-        fs.readFile(outfile, 'utf8', function(e, content) {
-          if(e || content != outcontent) {
+      if(templatecontent) {
+        var newcontent = render(infile, templatecontent, context);
+        fs.readFile(outfile, 'utf8', function(e, currentcontent) {
+          if(e || currentcontent != newcontent) {
             mkdirp(path.dirname(outfile), function(e) {
               if(e) {
                 throw e;
               }
-              fs.writeFileSync(outfile, outcontent, 'utf8', function(e) {
-                throw e;
-              });
+              fs.writeFileSync(outfile, newcontent, 'utf8');
             })
           }
         });
@@ -157,17 +199,20 @@ function renderFile(infile, outfile, context) {
 
 function render(infile, content, context) {
   try {
-    return ljs.render(content, context);
+    return ljs.render(minify(content), context);
   } catch(e) {
-    console.log("-------------------------------------------");
-    console.log(' - currentName : ', data.currentName);
-    console.log(' - current : ', data.current);
-    console.log(' - template : ', infile);
-    console.log("-------------------------------------------");
-    console.log(' => Error on template : ', infile);
-    console.log('');
-    console.log('Message : ', e.msg);
-    throw e;
+    try {
+      return ljs.render(content, context);
+    } catch(e) {
+      console.log("-------------------------------------------");
+      console.log(' - currentName : ', data.currentName);
+      console.log(' - current : ', data.current);
+      console.log(' - template : ', infile);
+      console.log("-------------------------------------------");
+      console.log(' => Error on template : ', infile);
+      console.log('');
+      console.log('Message : ', e);
+    }
   }
 }
 
@@ -191,19 +236,14 @@ function include(context) {
   });
 }
 
-function loadHelpers(folder) {
-  var file = path.join('helpers','H.js');
-  if(!path.isAbsolute(file)) {
-  	file = path.join(process.cwd(), file);
-  }
-  try {
-    if(require.resolve(file)) {
-      delete require.cache[require.resolve(file)];
-    }
-    return require(file);
-  } catch(e) {
-    return null;
-  }
+function getLineEnding(content) {
+  return (content.indexOf('\r') != -1)?'\r':'' + (content.indexOf('\n') != -1)?'\n':'';
+}
+
+function minify(content) {
+  var lineEnding = getLineEnding(content);
+  var regexp = "("+lineEnding+"){1,2}(("+lineEnding+")*)[ |\t]*({[%|#|/](?!=).*)";
+  return content.replace(new RegExp(regexp, 'g'), "$2$4");
 }
 
 console.log('-- START --');
@@ -220,12 +260,9 @@ if(hasValidationError) {
 }
 
 console.log('=> Load helpers');
-var H = loadHelpers('helpers');
-if(!H) {
-  console.log('No helper found : "helper/H.js"')
-}
+var helpers = loadHelpers('helpers');
 
 console.log('=> Generate');
-generate(data, 'templates', 'build');
+generate(data, helpers, 'templates', '..');
 
 console.log('-- END --');

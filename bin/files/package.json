@@ -11,7 +11,8 @@
     "ljs-template": "*",
     "js-yaml": "^3.5.3",
     "mkdirp": "^0.5.1",
-    "gutil": "*"
+    "gutil": "*",
+    "merge": "^1.2.0"
   },
   "devDependencies": {
     "nodemon": "^1.9.1"
