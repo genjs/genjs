@@ -1,6 +1,6 @@
 {
   "name": "genjs",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "GenJS",
   "files": [
     "lib", "bin"
@@ -27,7 +27,7 @@
   "dependencies": {
     "gutil": "^1.6.4",
     "inquirer": "^0.12.0",
-    "ljs-template": "^1.0.1",
+    "ljs-template": "^1.0.4",
     "lodash": "^4.6.1",
     "mkdirp": "^0.5.1",
     "q": "^1.4.1"
